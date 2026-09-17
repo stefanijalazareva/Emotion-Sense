@@ -1,0 +1,24 @@
+# Django and Web Framework
+Django==5.0.1
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+python-decouple==3.8
+gunicorn==21.2.0
+
+# Database
+psycopg2-binary==2.9.9
+
+# Machine Learning - Computer Vision
+opencv-python==4.9.0.80
+tf-keras==2.16.0
+pillow==11.0.0
+
+# Machine Learning - Audio/Speech
+numpy>=1.26.0
+torch==2.6.0
+torchaudio==2.6.0
+
+# NLP and AI
+groq==1.7.0
+httpx==0.28.1
+transformers==5.4.0

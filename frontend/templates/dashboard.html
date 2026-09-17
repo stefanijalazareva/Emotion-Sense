@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+
+{% block title %}History - EmotionSense{% endblock %}
+
+{% block content %}
+<div class="tool-page dashboard-page">
+    <header class="page-heading">
+        <h1>History</h1>
+        <p>Review recent emotion checks</p>
+    </header>
+
+    {% if user.is_authenticated %}
+    <div id="dashboard-content">
+        <section class="dashboard-section" aria-labelledby="recent-heading">
+            <div class="dashboard-section__heading">
+                <span class="section-index">01</span>
+                <h2 id="recent-heading">Recent emotions</h2>
+            </div>
+            <div id="emotion-logs" class="dashboard-status" role="status" aria-live="polite">Loading…</div>
+        </section>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p class="empty-state__label">No history to show</p>
+        <h2>Log in to view your check-ins.</h2>
+        <p>Your saved emotion history will appear here.</p>
+        <a href="{% url 'login' %}?next={{ request.path|urlencode }}" class="button button--primary">
+            Log in
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if user.is_authenticated %}
+<script>
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+async function fetchJson(url) {
+    const response = await fetch(url, {
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        credentials: 'same-origin',
+    });
+    if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+function renderEmotionLogs(logs) {
+    const container = document.getElementById('emotion-logs');
+    if (!logs.length) {
+        container.textContent = 'No emotion detections yet. Try the emotion detection page.';
+        return;
+    }
+
+    container.innerHTML = logs.slice(0, 10).map((log) => `
+        <div class="flex justify-between py-2 border-b border-gray-100 last:border-0">
+            <span class="capitalize">${log.emotion_type}</span>
+            <span class="text-sm text-gray-500">${new Date(log.timestamp).toLocaleString()} · ${Math.round(log.confidence * 100)}%</span>
+        </div>
+    `).join('');
+}
+
+async function loadDashboard() {
+    try {
+        const logs = await fetchJson('/api/emotions/logs/');
+        renderEmotionLogs(Array.isArray(logs) ? logs : logs.results || []);
+    } catch (error) {
+        document.getElementById('emotion-logs').textContent = 'Unable to load emotion history.';
+    }
+}
+
+loadDashboard();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,61 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}EmotionSense{% endblock %}</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{% static 'css/emotionsense.css' %}">
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="site-body">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+        <div class="site-header__inner">
+            <a class="brand" href="{% url 'home' %}" aria-label="EmotionSense home">
+                EmotionSense
+            </a>
+
+            {% with current_route=request.resolver_match.url_name %}
+            <nav class="site-nav" aria-label="Primary navigation">
+                <a href="{% url 'home' %}" data-nav-route="home"{% if current_route == 'home' %} aria-current="page"{% endif %}>Home</a>
+                {% if user.is_authenticated %}
+                <a href="{% url 'emotion_detect' %}" data-nav-route="emotion_detect"{% if current_route == 'emotion_detect' %} aria-current="page"{% endif %}>Detect</a>
+                {% endif %}
+                <a href="{% url 'chatbot' %}" data-nav-route="chatbot"{% if current_route == 'chatbot' %} aria-current="page"{% endif %}>Chat</a>
+                <a href="{% url 'dashboard' %}" data-nav-route="dashboard"{% if current_route == 'dashboard' %} aria-current="page"{% endif %}>History</a>
+            </nav>
+            {% endwith %}
+
+            <div class="account-nav">
+                {% if user.is_authenticated %}
+                    <span class="account-nav__name">{{ user.username }}</span>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="text-action">Log out</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}?next={{ request.path|urlencode }}" class="text-action">Log in</a>
+                    <a href="{% url 'signup' %}" class="button button--compact button--primary">Sign up</a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content" class="site-main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="site-footer__inner">
+            <span>© {% now "Y" %} EmotionSense</span>
+            <span>Tools for emotional awareness.</span>
+        </div>
+    </footer>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

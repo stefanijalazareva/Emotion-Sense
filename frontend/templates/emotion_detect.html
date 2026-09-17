@@ -1,0 +1,956 @@
+{% extends 'base.html' %}
+
+{% block title %}Emotion Detection - EmotionSense{% endblock %}
+
+{% block content %}
+<div class="tool-page detection-page">
+    <header class="page-heading">
+        <h1>Emotion check</h1>
+        <p>Choose a photo or voice recording</p>
+    </header>
+
+    <!-- Tabs Navigation -->
+    <div class="tool-tabs" role="tablist" aria-label="Detection method">
+            <button 
+                onclick="switchTab('facial')" 
+                id="facialTab"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="facialSection"
+                class="tab-button active"
+            >
+                Photo
+            </button>
+            <button 
+                onclick="switchTab('voice')" 
+                id="voiceTab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="voiceSection"
+                class="tab-button"
+            >
+                Voice
+            </button>
+    </div>
+
+    <!-- Facial Detection Section -->
+    <div id="facialSection" class="detection-panel" role="tabpanel" aria-labelledby="facialTab">
+        <div class="detection-panel__body">
+            <!-- Upload Section -->
+            <div class="file-section">
+                <h2>Choose a photo</h2>
+                <p class="field-help">Use a clear image with one visible face.</p>
+                <div class="file-picker">
+                    <div>
+                        <svg aria-hidden="true" class="file-picker__icon" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div class="file-picker__action">
+                            <label for="imageFile">
+                                <span>Choose a file</span>
+                                <input id="imageFile" name="imageFile" type="file" accept="image/*" class="sr-only" onchange="previewImage(event)">
+                            </label>
+                            <span>from your device</span>
+                        </div>
+                        <p class="file-picker__meta">PNG, JPG or BMP · up to 10 MB</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Capture -->
+            <div class="capture-option">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2>Use your camera</h2>
+                        <p>
+                            Your browser will ask for camera permission before showing a live preview.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        id="cameraStartBtn"
+                        onclick="startCamera()"
+                        class="control-button control-button--secondary"
+                    >
+                        Open Camera
+                    </button>
+                </div>
+
+                <p id="cameraStatus" class="capture-status text-gray-600" role="status" aria-live="polite"></p>
+
+                <div id="cameraCaptureContainer" class="hidden mt-4">
+                    <video
+                        id="cameraPreview"
+                        class="media-preview"
+                        autoplay
+                        playsinline
+                        muted
+                    ></video>
+                    <div class="capture-actions">
+                        <button
+                            type="button"
+                            id="cameraCaptureBtn"
+                            onclick="captureCameraPhoto()"
+                            class="control-button control-button--primary"
+                        >
+                            Take Photo
+                        </button>
+                        <button
+                            type="button"
+                            onclick="stopCamera()"
+                            class="control-button control-button--secondary"
+                        >
+                            Close Camera
+                        </button>
+                    </div>
+                </div>
+                <canvas id="cameraCanvas" class="hidden"></canvas>
+            </div>
+
+            <!-- Image Preview -->
+            <div id="facialPreviewContainer" class="hidden selected-preview">
+                <img id="facialPreview" class="media-preview" alt="Selected photo preview" />
+            </div>
+
+            <!-- Detect Button -->
+            <button 
+                onclick="detectEmotionFacial()" 
+                id="facialDetectBtn"
+                class="control-button control-button--primary control-button--full"
+            >
+                Detect Emotion
+            </button>
+
+            <!-- Loading State -->
+            <div id="facialLoadingState" class="hidden loading-state" role="status" aria-live="polite">
+                <div class="loading-state__spinner" aria-hidden="true"></div>
+                <p>Analyzing your image…</p>
+            </div>
+
+            <!-- Results -->
+            <div id="facialResult" class="hidden detection-result" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <!-- Voice Detection Section -->
+    <div id="voiceSection" class="hidden detection-panel" role="tabpanel" aria-labelledby="voiceTab">
+        <div class="detection-panel__body">
+            <!-- Upload Section -->
+            <div class="file-section">
+                <h2>Choose an audio file</h2>
+                <p class="field-help">Use a recording with clear, audible speech.</p>
+                <div class="file-picker">
+                    <div>
+                        <svg aria-hidden="true" class="file-picker__icon" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                            <path d="M24 4C12.95 4 4 12.95 4 24s8.95 20 20 20 20-8.95 20-20S35.05 4 24 4zm-2 30h4v-8h-4v8zm0-12h4V10h-4v12z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div class="file-picker__action">
+                            <label for="audioFile">
+                                <span>Choose a file</span>
+                                <input id="audioFile" name="audioFile" type="file" accept="audio/*" class="sr-only" onchange="previewAudio(event)">
+                            </label>
+                            <span>from your device</span>
+                        </div>
+                        <p class="file-picker__meta">WAV, MP3, FLAC, OGG or M4A · up to 25 MB</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Microphone Recording -->
+            <div class="capture-option">
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2>Use your microphone</h2>
+                        <p>
+                            Your browser will ask for microphone permission before recording starts.
+                        </p>
+                    </div>
+                    <div class="capture-actions capture-actions--inline">
+                        <span id="microphoneTimer" class="hidden font-mono text-sm font-semibold text-red-700">00:00</span>
+                        <button
+                            type="button"
+                            id="microphoneStartBtn"
+                            onclick="startMicrophoneRecording()"
+                            class="control-button control-button--secondary"
+                        >
+                            Start Recording
+                        </button>
+                        <button
+                            type="button"
+                            id="microphoneStopBtn"
+                            onclick="stopMicrophoneRecording()"
+                            class="hidden control-button control-button--danger"
+                        >
+                            Stop Recording
+                        </button>
+                    </div>
+                </div>
+                <p id="microphoneStatus" class="capture-status text-gray-600" role="status" aria-live="polite"></p>
+            </div>
+
+            <!-- Audio Preview -->
+            <div id="voicePreviewContainer" class="hidden selected-preview">
+                <audio id="voicePreview" controls class="audio-preview"></audio>
+            </div>
+
+            <!-- Detect Button -->
+            <button 
+                onclick="detectEmotionVoice()" 
+                id="voiceDetectBtn"
+                class="control-button control-button--primary control-button--full"
+            >
+                Detect Emotion
+            </button>
+
+            <!-- Loading State -->
+            <div id="voiceLoadingState" class="hidden loading-state" role="status" aria-live="polite">
+                <div class="loading-state__spinner" aria-hidden="true"></div>
+                <p>Analyzing your audio…</p>
+            </div>
+
+            <!-- Results -->
+            <div id="voiceResult" class="hidden detection-result" aria-live="polite"></div>
+        </div>
+    </div>
+
+    <!-- Recent Detections -->
+    <div id="recentDetections" class="recent-detections"></div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let selectedImageFile = null;
+    let selectedAudioFile = null;
+    let imagePreviewUrl = null;
+    let audioPreviewUrl = null;
+    let cameraStream = null;
+    let microphoneStream = null;
+    let microphoneRecorder = null;
+    let microphoneChunks = [];
+    let microphoneTimerId = null;
+    let microphoneStartedAt = null;
+
+    // Leave a small margin below the backend's 120-second hard limit.
+    const MAX_MICROPHONE_SECONDS = 119;
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function switchTab(tab) {
+        const facialTab = document.getElementById('facialTab');
+        const voiceTab = document.getElementById('voiceTab');
+        const facialSection = document.getElementById('facialSection');
+        const voiceSection = document.getElementById('voiceSection');
+
+        if (tab === 'facial') {
+            if (microphoneRecorder && microphoneRecorder.state === 'recording') {
+                stopMicrophoneRecording();
+            }
+            facialTab.classList.add('active');
+            facialTab.setAttribute('aria-selected', 'true');
+            facialTab.classList.add('text-indigo-600', 'border-indigo-600');
+            facialTab.classList.remove('text-gray-600', 'border-transparent');
+            voiceTab.classList.remove('active', 'text-indigo-600', 'border-indigo-600');
+            voiceTab.setAttribute('aria-selected', 'false');
+            voiceTab.classList.add('text-gray-600', 'border-transparent');
+            facialSection.classList.remove('hidden');
+            voiceSection.classList.add('hidden');
+        } else {
+            stopCamera();
+            voiceTab.classList.add('active');
+            voiceTab.setAttribute('aria-selected', 'true');
+            voiceTab.classList.add('text-indigo-600', 'border-indigo-600');
+            voiceTab.classList.remove('text-gray-600', 'border-transparent');
+            facialTab.classList.remove('active', 'text-indigo-600', 'border-indigo-600');
+            facialTab.setAttribute('aria-selected', 'false');
+            facialTab.classList.add('text-gray-600', 'border-transparent');
+            voiceSection.classList.remove('hidden');
+            facialSection.classList.add('hidden');
+        }
+    }
+
+    function setMediaStatus(elementId, message, isError = false) {
+        const statusElement = document.getElementById(elementId);
+        statusElement.textContent = message;
+        statusElement.classList.toggle('text-red-700', isError);
+        statusElement.classList.toggle('text-gray-600', !isError);
+    }
+
+    function explainMediaError(error, deviceName) {
+        if (!window.isSecureContext) {
+            return `${deviceName} access requires HTTPS or localhost.`;
+        }
+
+        const messages = {
+            NotAllowedError: `${deviceName} permission was denied. Allow access in your browser settings and try again.`,
+            NotFoundError: `No ${deviceName.toLowerCase()} was found on this device.`,
+            NotReadableError: `The ${deviceName.toLowerCase()} is already in use by another application.`,
+            AbortError: `${deviceName} access was interrupted. Please try again.`,
+            SecurityError: `${deviceName} access is blocked by the browser's security settings.`,
+        };
+
+        return messages[error.name] || `Could not access the ${deviceName.toLowerCase()}: ${error.message}`;
+    }
+
+    function requireMediaDevices() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            const error = new Error('Camera and microphone access are not supported in this browser.');
+            error.name = 'NotSupportedError';
+            throw error;
+        }
+    }
+
+    function setImagePreview(file) {
+        if (imagePreviewUrl) {
+            URL.revokeObjectURL(imagePreviewUrl);
+        }
+
+        imagePreviewUrl = URL.createObjectURL(file);
+        document.getElementById('facialPreview').src = imagePreviewUrl;
+        document.getElementById('facialPreviewContainer').classList.remove('hidden');
+    }
+
+    function clearImagePreview() {
+        if (imagePreviewUrl) {
+            URL.revokeObjectURL(imagePreviewUrl);
+            imagePreviewUrl = null;
+        }
+
+        const preview = document.getElementById('facialPreview');
+        preview.removeAttribute('src');
+        document.getElementById('facialPreviewContainer').classList.add('hidden');
+    }
+
+    async function startCamera() {
+        const startButton = document.getElementById('cameraStartBtn');
+        startButton.disabled = true;
+        setMediaStatus('cameraStatus', 'Waiting for camera permission...');
+
+        try {
+            requireMediaDevices();
+            stopCamera({ clearStatus: false });
+
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                },
+                audio: false,
+            });
+
+            const video = document.getElementById('cameraPreview');
+            video.srcObject = cameraStream;
+            document.getElementById('cameraCaptureContainer').classList.remove('hidden');
+            await video.play();
+            setMediaStatus('cameraStatus', 'Camera is active. Position your face and take a photo.');
+        } catch (error) {
+            stopCamera({ clearStatus: false });
+            setMediaStatus('cameraStatus', explainMediaError(error, 'Camera'), true);
+        } finally {
+            startButton.disabled = false;
+        }
+    }
+
+    function stopCamera(options = {}) {
+        const { clearStatus = true } = options;
+
+        if (cameraStream) {
+            cameraStream.getTracks().forEach((track) => track.stop());
+            cameraStream = null;
+        }
+
+        const video = document.getElementById('cameraPreview');
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+        }
+
+        const container = document.getElementById('cameraCaptureContainer');
+        if (container) {
+            container.classList.add('hidden');
+        }
+
+        if (clearStatus) {
+            setMediaStatus('cameraStatus', '');
+        }
+    }
+
+    function captureCameraPhoto() {
+        const video = document.getElementById('cameraPreview');
+        if (!cameraStream || !video.videoWidth || !video.videoHeight) {
+            setMediaStatus('cameraStatus', 'The camera is not ready yet. Please wait and try again.', true);
+            return;
+        }
+
+        const canvas = document.getElementById('cameraCanvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                setMediaStatus('cameraStatus', 'Could not capture the photo. Please try again.', true);
+                return;
+            }
+
+            selectedImageFile = new File(
+                [blob],
+                `camera-photo-${Date.now()}.jpg`,
+                { type: 'image/jpeg' },
+            );
+            document.getElementById('imageFile').value = '';
+            setImagePreview(selectedImageFile);
+            stopCamera({ clearStatus: false });
+            setMediaStatus('cameraStatus', 'Photo captured and ready for emotion detection.');
+        }, 'image/jpeg', 0.92);
+    }
+
+    function setAudioPreview(file) {
+        if (audioPreviewUrl) {
+            URL.revokeObjectURL(audioPreviewUrl);
+        }
+
+        audioPreviewUrl = URL.createObjectURL(file);
+        const preview = document.getElementById('voicePreview');
+        preview.src = audioPreviewUrl;
+        document.getElementById('voicePreviewContainer').classList.remove('hidden');
+    }
+
+    function clearAudioPreview() {
+        if (audioPreviewUrl) {
+            URL.revokeObjectURL(audioPreviewUrl);
+            audioPreviewUrl = null;
+        }
+
+        const preview = document.getElementById('voicePreview');
+        preview.pause();
+        preview.removeAttribute('src');
+        preview.load();
+        document.getElementById('voicePreviewContainer').classList.add('hidden');
+    }
+
+    function chooseRecorderMimeType() {
+        const candidates = [
+            'audio/webm;codecs=opus',
+            'audio/ogg;codecs=opus',
+            'audio/mp4',
+            'audio/webm',
+        ];
+
+        return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || '';
+    }
+
+    async function startMicrophoneRecording() {
+        if (microphoneRecorder && microphoneRecorder.state === 'recording') {
+            return;
+        }
+
+        const startButton = document.getElementById('microphoneStartBtn');
+        startButton.disabled = true;
+        setMicrophoneInputsEnabled(false);
+        setMediaStatus('microphoneStatus', 'Waiting for microphone permission...');
+
+        try {
+            requireMediaDevices();
+            if (!window.MediaRecorder) {
+                throw new Error('Audio recording is not supported in this browser.');
+            }
+
+            microphoneStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: false,
+                },
+                video: false,
+            });
+
+            const mimeType = chooseRecorderMimeType();
+            const recorderOptions = mimeType ? { mimeType } : undefined;
+            microphoneRecorder = new MediaRecorder(microphoneStream, recorderOptions);
+            microphoneChunks = [];
+
+            microphoneRecorder.addEventListener('dataavailable', (event) => {
+                if (event.data && event.data.size > 0) {
+                    microphoneChunks.push(event.data);
+                }
+            });
+            microphoneRecorder.addEventListener('stop', finalizeMicrophoneRecording, { once: true });
+            microphoneRecorder.addEventListener('error', (event) => {
+                setMediaStatus(
+                    'microphoneStatus',
+                    `Recording failed: ${event.error?.message || 'Unknown recorder error'}`,
+                    true,
+                );
+                releaseMicrophoneStream();
+                resetMicrophoneControls();
+                setMicrophoneInputsEnabled(true);
+            }, { once: true });
+
+            selectedAudioFile = null;
+            const audioInput = document.getElementById('audioFile');
+            audioInput.value = '';
+            audioInput.disabled = true;
+            clearAudioPreview();
+            document.getElementById('voiceResult').classList.add('hidden');
+
+            microphoneRecorder.start(1000);
+            microphoneStartedAt = Date.now();
+            document.getElementById('microphoneStartBtn').classList.add('hidden');
+            document.getElementById('microphoneStopBtn').classList.remove('hidden');
+            document.getElementById('microphoneTimer').classList.remove('hidden');
+            updateMicrophoneTimer();
+            microphoneTimerId = window.setInterval(updateMicrophoneTimer, 250);
+            setMediaStatus('microphoneStatus', 'Recording... Speak naturally, then press Stop Recording.');
+        } catch (error) {
+            releaseMicrophoneStream();
+            resetMicrophoneControls();
+            setMicrophoneInputsEnabled(true);
+            setMediaStatus('microphoneStatus', explainMediaError(error, 'Microphone'), true);
+        } finally {
+            startButton.disabled = false;
+        }
+    }
+
+    function updateMicrophoneTimer() {
+        if (!microphoneStartedAt) {
+            return;
+        }
+
+        const elapsedSeconds = Math.floor((Date.now() - microphoneStartedAt) / 1000);
+        const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+        const seconds = String(elapsedSeconds % 60).padStart(2, '0');
+        document.getElementById('microphoneTimer').textContent = `${minutes}:${seconds}`;
+
+        if (elapsedSeconds >= MAX_MICROPHONE_SECONDS) {
+            stopMicrophoneRecording();
+        }
+    }
+
+    function stopMicrophoneRecording() {
+        if (!microphoneRecorder || microphoneRecorder.state !== 'recording') {
+            releaseMicrophoneStream();
+            resetMicrophoneControls();
+            setMicrophoneInputsEnabled(true);
+            return;
+        }
+
+        document.getElementById('microphoneStopBtn').disabled = true;
+        setMediaStatus('microphoneStatus', 'Preparing your recording...');
+        microphoneRecorder.stop();
+        releaseMicrophoneStream();
+    }
+
+    function releaseMicrophoneStream() {
+        if (microphoneStream) {
+            microphoneStream.getTracks().forEach((track) => track.stop());
+            microphoneStream = null;
+        }
+    }
+
+    function resetMicrophoneControls() {
+        if (microphoneTimerId) {
+            window.clearInterval(microphoneTimerId);
+            microphoneTimerId = null;
+        }
+
+        microphoneStartedAt = null;
+        const startButton = document.getElementById('microphoneStartBtn');
+        const stopButton = document.getElementById('microphoneStopBtn');
+        const timer = document.getElementById('microphoneTimer');
+        startButton.classList.remove('hidden');
+        stopButton.classList.add('hidden');
+        stopButton.disabled = false;
+        timer.classList.add('hidden');
+        timer.textContent = '00:00';
+    }
+
+    function setMicrophoneInputsEnabled(enabled) {
+        document.getElementById('audioFile').disabled = !enabled;
+        document.getElementById('voiceDetectBtn').disabled = !enabled;
+    }
+
+    async function finalizeMicrophoneRecording() {
+        const recorder = microphoneRecorder;
+        const chunks = microphoneChunks;
+        microphoneRecorder = null;
+        microphoneChunks = [];
+        resetMicrophoneControls();
+
+        if (!chunks.length) {
+            setMediaStatus('microphoneStatus', 'No audio was recorded. Please try again.', true);
+            setMicrophoneInputsEnabled(true);
+            return;
+        }
+
+        try {
+            const recordedBlob = new Blob(chunks, {
+                type: recorder?.mimeType || chunks[0].type || 'audio/webm',
+            });
+            const wavBlob = await convertRecordingToWav(recordedBlob);
+            selectedAudioFile = new File(
+                [wavBlob],
+                `microphone-recording-${Date.now()}.wav`,
+                { type: 'audio/wav' },
+            );
+            setAudioPreview(selectedAudioFile);
+            setMediaStatus('microphoneStatus', 'Recording is ready. You can preview it or detect the emotion.');
+        } catch (error) {
+            setMediaStatus(
+                'microphoneStatus',
+                `Could not prepare the recording: ${error.message}`,
+                true,
+            );
+        } finally {
+            setMicrophoneInputsEnabled(true);
+        }
+    }
+
+    async function convertRecordingToWav(recordedBlob) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) {
+            throw new Error('Audio conversion is not supported in this browser.');
+        }
+
+        const audioContext = new AudioContextClass();
+        try {
+            const encodedAudio = await recordedBlob.arrayBuffer();
+            const decodedAudio = await audioContext.decodeAudioData(encodedAudio.slice(0));
+            const monoSamples = new Float32Array(decodedAudio.length);
+
+            for (let channelIndex = 0; channelIndex < decodedAudio.numberOfChannels; channelIndex++) {
+                const channelSamples = decodedAudio.getChannelData(channelIndex);
+                for (let sampleIndex = 0; sampleIndex < channelSamples.length; sampleIndex++) {
+                    monoSamples[sampleIndex] += channelSamples[sampleIndex] / decodedAudio.numberOfChannels;
+                }
+            }
+
+            return encodeWav(monoSamples, decodedAudio.sampleRate);
+        } finally {
+            await audioContext.close();
+        }
+    }
+
+    function encodeWav(samples, sampleRate) {
+        const bytesPerSample = 2;
+        const wavBuffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+        const view = new DataView(wavBuffer);
+
+        writeAscii(view, 0, 'RIFF');
+        view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+        writeAscii(view, 8, 'WAVE');
+        writeAscii(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * bytesPerSample, true);
+        view.setUint16(32, bytesPerSample, true);
+        view.setUint16(34, 16, true);
+        writeAscii(view, 36, 'data');
+        view.setUint32(40, samples.length * bytesPerSample, true);
+
+        let offset = 44;
+        for (const sample of samples) {
+            const clampedSample = Math.max(-1, Math.min(1, sample));
+            view.setInt16(
+                offset,
+                clampedSample < 0 ? clampedSample * 0x8000 : clampedSample * 0x7fff,
+                true,
+            );
+            offset += bytesPerSample;
+        }
+
+        return new Blob([wavBuffer], { type: 'audio/wav' });
+    }
+
+    function writeAscii(view, offset, text) {
+        for (let index = 0; index < text.length; index++) {
+            view.setUint8(offset + index, text.charCodeAt(index));
+        }
+    }
+
+    function previewImage(event) {
+        const file = event.target.files[0];
+
+        if (file) {
+            stopCamera();
+            selectedImageFile = file;
+            setImagePreview(file);
+            document.getElementById('facialResult').classList.add('hidden');
+        }
+    }
+
+    function previewAudio(event) {
+        const file = event.target.files[0];
+
+        if (file) {
+            selectedAudioFile = file;
+            setAudioPreview(file);
+            setMediaStatus('microphoneStatus', '');
+            document.getElementById('voiceResult').classList.add('hidden');
+        }
+    }
+
+    async function detectEmotionFacial() {
+        const imageFile = selectedImageFile || document.getElementById('imageFile').files[0];
+        const resultDiv = document.getElementById('facialResult');
+        const detectBtn = document.getElementById('facialDetectBtn');
+        const loadingState = document.getElementById('facialLoadingState');
+
+        if (!imageFile) {
+            showNotification('Please select an image file', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('image', imageFile);
+        formData.append('source', 'face');
+
+        const csrfToken = getCookie('csrftoken');
+
+        detectBtn.disabled = true;
+        loadingState.classList.remove('hidden');
+        resultDiv.classList.add('hidden');
+
+        try {
+            const response = await fetch('/api/emotions/logs/detect/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'include',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok && !data.error && data.face_detected !== false) {
+                displaySuccess(data, 'facial');
+            } else {
+                displayError(data, 'facial');
+            }
+        } catch (error) {
+            displayError({ error: 'Network error: ' + error.message }, 'facial');
+        } finally {
+            detectBtn.disabled = false;
+            loadingState.classList.add('hidden');
+        }
+    }
+
+    async function detectEmotionVoice() {
+        const audioFile = selectedAudioFile || document.getElementById('audioFile').files[0];
+        const resultDiv = document.getElementById('voiceResult');
+        const detectBtn = document.getElementById('voiceDetectBtn');
+        const loadingState = document.getElementById('voiceLoadingState');
+
+        if (!audioFile) {
+            showNotification('Please select an audio file', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio', audioFile);
+        formData.append('source', 'voice');
+
+        const csrfToken = getCookie('csrftoken');
+
+        detectBtn.disabled = true;
+        loadingState.classList.remove('hidden');
+        resultDiv.classList.add('hidden');
+
+        try {
+            const response = await fetch('/api/emotions/logs/detect/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'include',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok && !data.error && data.audio_processed !== false) {
+                displaySuccess(data, 'voice');
+            } else {
+                displayError(data, 'voice');
+            }
+        } catch (error) {
+            displayError({ error: 'Network error: ' + error.message }, 'voice');
+        } finally {
+            detectBtn.disabled = false;
+            loadingState.classList.add('hidden');
+        }
+    }
+
+    function displaySuccess(data, type) {
+        const resultDiv = type === 'facial' ? document.getElementById('facialResult') : document.getElementById('voiceResult');
+        
+        const emotionEmojis = {
+            'happy': '😊',
+            'sad': '😢',
+            'angry': '😠',
+            'fear': '😨',
+            'surprised': '😲',
+            'surprise': '😲',
+            'scared': '😨',
+            'disgust': '🤢',
+            'neutral': '😐'
+        };
+        
+        const emoji = emotionEmojis[data.emotion] || '😊';
+        const emotionLabel = data.emotion === 'surprised' ? 'Surprised' : data.emotion === 'scared' ? 'Scared' : data.emotion.charAt(0).toUpperCase() + data.emotion.slice(1);
+        
+        let html = `
+            <div class="bg-green-50 border border-green-200 rounded-lg p-6">
+                <div class="text-center mb-6">
+                    <span class="text-6xl">${emoji}</span>
+                    <h3 class="text-2xl font-bold text-gray-900 mt-2">
+                        ${emotionLabel}
+                    </h3>
+                    <p class="text-lg text-gray-600 mt-1">
+                        Confidence: ${(data.confidence * 100).toFixed(1)}%
+                    </p>
+        `;
+
+        if (type === 'voice' && data.model_used) {
+            html += `
+                    <p class="text-sm text-gray-500 mt-2">
+                        Model: ${data.model_used}
+                    </p>
+            `;
+            if (data.duration_seconds) {
+                html += `
+                    <p class="text-sm text-gray-500">
+                        Duration: ${data.duration_seconds.toFixed(2)}s
+                    </p>
+                `;
+            }
+        }
+
+        html += `
+                </div>
+        `;
+
+        if (type === 'facial' && data.all_emotions) {
+            html += '<div class="mt-6"><h4 class="font-semibold text-gray-700 mb-3">All Detected Emotions:</h4>';
+            const sortedEmotions = Object.entries(data.all_emotions)
+                .sort((a, b) => b[1] - a[1]);
+            
+            for (const [emotion, score] of sortedEmotions) {
+                const percentage = Number(score) * 100;
+                const barColor = emotion === data.emotion ? 'bg-indigo-600' : 'bg-gray-400';
+                const label = emotion === 'surprised' ? 'Surprised' : emotion === 'scared' ? 'Scared' : emotion.charAt(0).toUpperCase() + emotion.slice(1);
+                html += `
+                    <div class="mb-3">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-gray-700">${label}</span>
+                            <span class="text-sm font-medium text-gray-700">${percentage.toFixed(1)}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="${barColor} h-2.5 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+        }
+
+        if (type === 'voice' && data.all_emotions && Object.keys(data.all_emotions).length > 0) {
+            html += '<div class="mt-6"><h4 class="font-semibold text-gray-700 mb-3">Emotion Scores:</h4>';
+            const sortedEmotions = Object.entries(data.all_emotions)
+                .sort((a, b) => b[1] - a[1]);
+            
+            for (const [emotion, score] of sortedEmotions) {
+                const percentage = (score * 100);
+                const barColor = emotion === data.emotion ? 'bg-indigo-600' : 'bg-gray-400';
+                html += `
+                    <div class="mb-3">
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-gray-700">${emotion.charAt(0).toUpperCase() + emotion.slice(1)}</span>
+                            <span class="text-sm font-medium text-gray-700">${percentage.toFixed(1)}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="${barColor} h-2.5 rounded-full transition-all duration-500" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+        }
+
+        html += `
+                <div class="mt-6 text-center">
+                    <button onclick="clearResults('${type}')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-lg">
+                        ${type === 'facial' ? 'Detect Another Image' : 'Detect Another Audio'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        resultDiv.innerHTML = html;
+        resultDiv.classList.remove('hidden');
+    }
+
+    function displayError(data, type) {
+        const resultDiv = type === 'facial' ? document.getElementById('facialResult') : document.getElementById('voiceResult');
+        resultDiv.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-6" role="alert">
+                <h3 class="text-lg font-semibold text-red-800 mb-2">Error</h3>
+                <p class="text-red-700">${data.error || data.detail || 'Unknown error occurred'}</p>
+                ${data.face_detected === false ? '<p class="text-sm text-red-600 mt-2">Make sure the image contains a clear, visible face.</p>' : ''}
+                ${data.audio_processed === false && type === 'voice' && data.error_code !== 'voice_model_unavailable' ? '<p class="text-sm text-red-600 mt-2">Make sure the audio file is valid and contains speech.</p>' : ''}
+                ${data.error_code === 'voice_model_unavailable' ? '<p class="text-sm text-red-600 mt-2">This is a server model problem, not a problem with your recording.</p>' : ''}
+            </div>
+        `;
+        resultDiv.classList.remove('hidden');
+    }
+
+    function clearResults(type) {
+        if (type === 'facial') {
+            selectedImageFile = null;
+            stopCamera();
+            document.getElementById('imageFile').value = '';
+            clearImagePreview();
+            document.getElementById('facialResult').classList.add('hidden');
+        } else {
+            selectedAudioFile = null;
+            document.getElementById('audioFile').value = '';
+            clearAudioPreview();
+            setMediaStatus('microphoneStatus', '');
+            document.getElementById('voiceResult').classList.add('hidden');
+        }
+    }
+
+    function showNotification(message, type) {
+        alert(message);
+    }
+
+    window.addEventListener('pagehide', () => {
+        stopCamera({ clearStatus: false });
+        if (microphoneRecorder && microphoneRecorder.state === 'recording') {
+            microphoneRecorder.stop();
+        }
+        releaseMicrophoneStream();
+    });
+</script>
+{% endblock %}

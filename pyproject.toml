@@ -1,0 +1,35 @@
+[project]
+name = "emotionsense"
+version = "0.1.0"
+description = "AI-powered emotion detection and mental well-being support"
+requires-python = ">=3.10"
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    migrations
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+]
+ignore = [
+    "E501",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config", "ml_models"]

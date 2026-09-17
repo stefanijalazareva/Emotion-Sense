@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="home-page">
+    <section class="home-intro" aria-labelledby="home-title">
+        <div class="home-intro__copy">
+            <h1 id="home-title">A simple place to check in.</h1>
+            <p class="home-intro__lede">
+                Check emotional moods in a photo or voice recording, talk through what is on your mind
+                and keep track of the check-ins.
+            </p>
+            <div class="button-row">
+                <a href="{% url 'emotion_detect' %}" class="button button--primary">Check an emotion</a>
+                <a href="{% url 'chatbot' %}" class="button button--secondary">Open support chat</a>
+            </div>
+        </div>
+
+        <aside class="start-panel" aria-labelledby="start-title">
+            <p class="start-panel__label">Start here</p>
+            <h2 id="start-title">Choose what feels useful now</h2>
+            <a href="{% url 'emotion_detect' %}" class="start-panel__item">
+                <span>
+                    <strong>Check an emotion</strong>
+                    <small>Use a photo, audio file, camera or microphone</small>
+                </span>
+                <span aria-hidden="true">→</span>
+            </a>
+            <a href="{% url 'chatbot' %}" class="start-panel__item">
+                <span>
+                    <strong>Talk it through</strong>
+                    <small>Continue with the support chat</small>
+                </span>
+                <span aria-hidden="true">→</span>
+            </a>
+            <a href="{% url 'dashboard' %}" class="start-panel__item">
+                <span>
+                    <strong>Review your history</strong>
+                    <small>Look back at saved check-ins</small>
+                </span>
+                <span aria-hidden="true">→</span>
+            </a>
+        </aside>
+    </section>
+
+    <p class="home-note">Emotion recognition offers context, not a medical diagnosis.</p>
+</div>
+{% endblock %}

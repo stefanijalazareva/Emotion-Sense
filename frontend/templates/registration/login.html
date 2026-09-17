@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}Sign In - EmotionSense{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <header class="auth-heading">
+            <h1>Welcome back</h1>
+            <p>Log in to continue with your saved conversations and history.</p>
+        </header>
+
+        {% if form.non_field_errors %}
+        <div class="form-alert" role="alert">
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'login' %}" class="form-stack">
+            {% csrf_token %}
+            {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+            <div>
+                <label for="{{ form.username.id_for_label }}">Username</label>
+                {{ form.username }}
+                {% for error in form.username.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            </div>
+
+            <div>
+                <label for="{{ form.password.id_for_label }}">Password</label>
+                {{ form.password }}
+                {% for error in form.password.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+            </div>
+
+            <button type="submit" class="control-button control-button--primary control-button--full">
+                Log in
+            </button>
+        </form>
+
+        <p class="auth-switch">
+            New to EmotionSense?
+            <a href="{% url 'signup' %}">Create an account</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

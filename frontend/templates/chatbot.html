@@ -1,0 +1,606 @@
+{% extends 'base.html' %}
+
+{% block title %}Support Chat - EmotionSense{% endblock %}
+
+{% block content %}
+<div class="tool-page chat-page">
+    <header class="page-heading page-heading--compact">
+        <h1>Support chat</h1>
+        <p>Share what is on your mind and take the conversation at your own pace.</p>
+    </header>
+
+    <!-- Main Chat Container -->
+    <div class="chat-shell">
+        <!-- Emotion Status Bar -->
+        <div id="emotionBar" class="emotion-bar">
+            <div class="emotion-bar__status">
+                <span id="emotionEmoji" class="emotion-bar__emoji" aria-hidden="true">😊</span>
+                <div>
+                    <p class="emotion-bar__primary">Current mood: <span id="currentEmotion">Neutral</span></p>
+                </div>
+            </div>
+            <div class="emotion-bar__actions">
+                <button type="button" onclick="detectEmotionQuick()" class="control-button control-button--secondary control-button--small">
+                    Add a photo
+                </button>
+                <button
+                    type="button"
+                    id="chatCameraStartBtn"
+                    onclick="startChatCamera()"
+                    class="control-button control-button--secondary control-button--small"
+                    aria-controls="chatCameraPanel"
+                    aria-expanded="false"
+                >
+                    Use camera
+                </button>
+            </div>
+        </div>
+
+        <!-- Camera Capture -->
+        <div id="chatCameraPanel" class="chat-camera hidden" role="region" aria-label="Take a photo">
+            <video
+                id="chatCameraPreview"
+                class="chat-camera__preview"
+                aria-label="Live camera preview"
+                autoplay
+                playsinline
+                muted
+            ></video>
+            <p id="chatCameraStatus" class="chat-camera__status" role="status" aria-live="polite"></p>
+            <div class="chat-camera__actions">
+                <button
+                    type="button"
+                    id="chatCameraCaptureBtn"
+                    onclick="captureChatCameraPhoto()"
+                    class="control-button control-button--primary control-button--small"
+                    disabled
+                >
+                    Take photo
+                </button>
+                <button
+                    type="button"
+                    onclick="stopChatCamera()"
+                    class="control-button control-button--secondary control-button--small"
+                >
+                    Close camera
+                </button>
+            </div>
+            <canvas id="chatCameraCanvas" class="hidden"></canvas>
+        </div>
+
+        <!-- Chat Messages -->
+        <div id="chatMessages" class="chat-messages" role="log" aria-live="off" aria-label="Conversation">
+            <!-- Welcome Message -->
+            <div class="message-row">
+                <div class="message-avatar">
+                    AI
+                </div>
+                <div class="message-content">
+                    <div class="message-bubble">
+                        <p>Hello. How are you feeling today?</p>
+                    </div>
+                    <p class="message-time">Just now</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="chat-composer">
+            <label for="messageInput" class="sr-only">Message</label>
+            <div class="chat-composer__row">
+                <input
+                    type="text"
+                    id="messageInput"
+                    placeholder="Write a message…"
+                    class="chat-input"
+                    onkeypress="handleKeyPress(event)"
+                />
+                <button
+                    onclick="sendMessage()"
+                    id="sendBtn"
+                    class="control-button control-button--primary"
+                >
+                    Send
+                </button>
+            </div>
+            <div class="chat-meta">
+                {% if user.is_authenticated %}
+                <span>History saved for {{ user.username }}</span>
+                {% else %}
+                <span>
+                    <a href="{% url 'login' %}?next={% url 'chatbot' %}">Log in</a> to save your history.
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden File Input for Emotion Detection -->
+<input type="file" id="emotionImageInput" accept="image/*" class="hidden" onchange="processEmotionImage(event)">
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentEmotion = null;
+    let emotionConfidence = null;
+    let currentEmotionSource = null;
+    let isWaitingForResponse = false;
+    let chatCameraStream = null;
+    let chatCameraRequestId = 0;
+    const isAuthenticated = {{ user.is_authenticated|yesno:"true,false" }};
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            sendMessage();
+        }
+    }
+
+    async function loadChatHistory() {
+        if (!isAuthenticated) return;
+
+        try {
+            const response = await fetch('/api/chatbot/messages/history/', {
+                method: 'GET',
+                credentials: 'same-origin'
+            });
+
+            if (!response.ok) {
+                throw new Error(`History request failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const messages = Array.isArray(data.messages) ? data.messages : [];
+
+            if (data.context && data.context.current_emotion) {
+                currentEmotion = data.context.current_emotion;
+                emotionConfidence = data.context.emotion_confidence;
+                currentEmotionSource = 'chat';
+                updateEmotionDisplay(currentEmotion, emotionConfidence);
+            }
+
+            if (!messages.length) return;
+
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.innerHTML = '';
+            for (const message of messages) {
+                addMessage(
+                    message.sender,
+                    message.message,
+                    false,
+                    message.timestamp
+                );
+            }
+        } catch (error) {
+            console.error('Unable to load chat history:', error);
+        }
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById('messageInput');
+        const message = input.value.trim();
+
+        if (!message || isWaitingForResponse) return;
+
+        // Add user message to chat
+        addMessage('user', message);
+        input.value = '';
+
+        // Disable input while waiting
+        isWaitingForResponse = true;
+        document.getElementById('sendBtn').disabled = true;
+
+        // Show typing indicator
+        const typingId = showTypingIndicator();
+
+        try {
+            const formData = new FormData();
+            formData.append('message', message);
+            if (currentEmotion && currentEmotionSource === 'face') {
+                formData.append('emotion', currentEmotion);
+                formData.append('emotion_confidence', emotionConfidence || 0.8);
+            }
+
+            const response = await fetch('/api/chatbot/messages/send/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                credentials: 'include',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            // Remove typing indicator
+            removeTypingIndicator(typingId);
+
+            if (response.ok) {
+                // Add bot response
+                addMessage('bot', data.bot_message.message);
+
+                if (data.context && data.context.current_emotion) {
+                    currentEmotion = data.context.current_emotion;
+                    emotionConfidence = data.context.emotion_confidence;
+                    currentEmotionSource = 'chat';
+                    updateEmotionDisplay(currentEmotion, emotionConfidence);
+                }
+
+            } else {
+                // Check if there's a bot_message in the error response
+                const errorMsg = data.bot_message?.message || data.error || 'Sorry, I encountered an error. Please try again.';
+                console.error('Chatbot error:', data);
+                addMessage('bot', errorMsg, true);
+            }
+        } catch (error) {
+            removeTypingIndicator(typingId);
+            console.error('Network error:', error);
+            addMessage('bot', 'Network error. Please check your connection and make sure the server is running.', true);
+        } finally {
+            isWaitingForResponse = false;
+            document.getElementById('sendBtn').disabled = false;
+        }
+    }
+
+    function addMessage(sender, message, isError = false, timestamp = null) {
+        const messagesDiv = document.getElementById('chatMessages');
+        const messageEl = document.createElement('div');
+        messageEl.className = 'flex items-start space-x-2 ' + (sender === 'user' ? 'flex-row-reverse space-x-reverse' : '');
+
+        const avatar = sender === 'user' 
+            ? '<div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold">U</div>'
+            : '<div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold">AI</div>';
+
+        const bgColor = sender === 'user' ? 'bg-indigo-600 text-white' : (isError ? 'bg-red-100' : 'bg-white');
+        const textColor = sender === 'user' ? 'text-white' : (isError ? 'text-red-800' : 'text-gray-800');
+
+        messageEl.innerHTML = `
+            ${avatar}
+            <div class="flex-1">
+                <div class="${bgColor} rounded-lg shadow p-3 max-w-md ${sender === 'user' ? 'ml-auto' : ''}">
+                    <p class="${textColor}">${escapeHtml(message)}</p>
+                </div>
+                <p class="text-xs text-gray-500 mt-1 ${sender === 'user' ? 'text-right' : ''}">${formatTimestamp(timestamp)}</p>
+            </div>
+        `;
+
+        messagesDiv.appendChild(messageEl);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addImageMessage(sender, file, timestamp = null) {
+        const messagesDiv = document.getElementById('chatMessages');
+        const messageEl = document.createElement('div');
+        messageEl.dataset.messageType = 'image';
+        messageEl.className = 'flex items-start space-x-2 ' + (sender === 'user' ? 'flex-row-reverse space-x-reverse' : '');
+
+        const avatar = document.createElement('div');
+        avatar.className = sender === 'user'
+            ? 'flex-shrink-0 w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold'
+            : 'flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold';
+        avatar.textContent = sender === 'user' ? 'U' : 'AI';
+
+        const content = document.createElement('div');
+        content.className = 'flex-1';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bg-indigo-600 rounded-lg shadow p-2 max-w-md ml-auto';
+
+        const image = document.createElement('img');
+        const imageUrl = URL.createObjectURL(file);
+        image.src = imageUrl;
+        image.alt = file.name ? `Uploaded image: ${file.name}` : 'Uploaded image';
+        image.className = 'max-h-64 max-w-full rounded object-contain ml-auto';
+        image.addEventListener('load', () => URL.revokeObjectURL(imageUrl), { once: true });
+
+        const caption = document.createElement('p');
+        caption.className = 'mt-1 text-xs text-indigo-100';
+        caption.textContent = file.name ? `${file.name} · Image sent` : 'Image sent';
+
+        const time = document.createElement('p');
+        time.className = 'text-xs text-gray-500 mt-1 text-right';
+        time.textContent = formatTimestamp(timestamp);
+
+        bubble.append(image, caption);
+        content.append(bubble, time);
+        messageEl.append(avatar, content);
+        messagesDiv.appendChild(messageEl);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function showTypingIndicator() {
+        const messagesDiv = document.getElementById('chatMessages');
+        const typingEl = document.createElement('div');
+        const id = 'typing-' + Date.now();
+        typingEl.id = id;
+        typingEl.setAttribute('role', 'status');
+        typingEl.setAttribute('aria-label', 'EmotionSense is responding');
+        typingEl.className = 'flex items-start space-x-2';
+        typingEl.innerHTML = `
+            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold">AI</div>
+            <div class="bg-white rounded-lg shadow p-3">
+                <div class="flex space-x-1">
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                </div>
+            </div>
+        `;
+        messagesDiv.appendChild(typingEl);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        return id;
+    }
+
+    function removeTypingIndicator(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+    }
+
+    function detectEmotionQuick() {
+        document.getElementById('emotionImageInput').click();
+    }
+
+    async function processEmotionImage(event) {
+        const input = event.currentTarget;
+        const file = input.files[0];
+        if (!file) return;
+
+        await processEmotionFile(file);
+        input.value = '';
+    }
+
+    function setChatCameraStatus(message, isError = false) {
+        const status = document.getElementById('chatCameraStatus');
+        status.textContent = message;
+        status.classList.toggle('chat-camera__status--error', isError);
+    }
+
+    function explainChatCameraError(error) {
+        if (!window.isSecureContext) {
+            return 'Camera access requires HTTPS or localhost.';
+        }
+
+        const messages = {
+            NotAllowedError: 'Camera permission was denied. Allow access in your browser settings and try again.',
+            NotFoundError: 'No camera was found on this device.',
+            NotReadableError: 'The camera is already in use by another application.',
+            AbortError: 'Camera access was interrupted. Please try again.',
+            SecurityError: 'Camera access is blocked by the browser\'s security settings.',
+        };
+
+        return messages[error.name] || `Could not access the camera: ${error.message}`;
+    }
+
+    async function startChatCamera() {
+        const panel = document.getElementById('chatCameraPanel');
+        const startButton = document.getElementById('chatCameraStartBtn');
+        const captureButton = document.getElementById('chatCameraCaptureBtn');
+
+        stopChatCamera({ hidePanel: false, clearStatus: false });
+        const requestId = chatCameraRequestId;
+        panel.classList.remove('hidden');
+        startButton.setAttribute('aria-expanded', 'true');
+        startButton.disabled = true;
+        captureButton.disabled = true;
+        setChatCameraStatus('Waiting for camera permission...');
+
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                const error = new Error('Camera access is not supported in this browser.');
+                error.name = 'NotSupportedError';
+                throw error;
+            }
+
+            const requestedStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'user',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                },
+                audio: false,
+            });
+
+            if (requestId !== chatCameraRequestId) {
+                requestedStream.getTracks().forEach((track) => track.stop());
+                return;
+            }
+
+            chatCameraStream = requestedStream;
+            requestedStream.getVideoTracks().forEach((track) => {
+                track.addEventListener('ended', () => {
+                    if (chatCameraStream !== requestedStream) return;
+
+                    stopChatCamera({ hidePanel: false, clearStatus: false });
+                    setChatCameraStatus('The camera stopped. Reopen it to take a photo.', true);
+                    startButton.focus();
+                }, { once: true });
+            });
+
+            const preview = document.getElementById('chatCameraPreview');
+            preview.srcObject = chatCameraStream;
+            await preview.play();
+
+            if (requestId !== chatCameraRequestId) {
+                requestedStream.getTracks().forEach((track) => track.stop());
+                return;
+            }
+
+            captureButton.disabled = false;
+            setChatCameraStatus('Camera is active. Position your face, then take a photo.');
+            captureButton.focus();
+        } catch (error) {
+            if (requestId !== chatCameraRequestId) return;
+
+            stopChatCamera({ hidePanel: false, clearStatus: false });
+            setChatCameraStatus(explainChatCameraError(error), true);
+            startButton.focus();
+        } finally {
+            if (requestId === chatCameraRequestId) {
+                startButton.disabled = false;
+            }
+        }
+    }
+
+    function stopChatCamera(options = {}) {
+        const { hidePanel = true, clearStatus = true, restoreFocus = hidePanel } = options;
+        chatCameraRequestId += 1;
+
+        if (chatCameraStream) {
+            const streamToStop = chatCameraStream;
+            chatCameraStream = null;
+            streamToStop.getTracks().forEach((track) => track.stop());
+        }
+
+        const preview = document.getElementById('chatCameraPreview');
+        preview.pause();
+        preview.srcObject = null;
+        document.getElementById('chatCameraCaptureBtn').disabled = true;
+        document.getElementById('chatCameraStartBtn').disabled = false;
+
+        if (hidePanel) {
+            document.getElementById('chatCameraPanel').classList.add('hidden');
+            document.getElementById('chatCameraStartBtn').setAttribute('aria-expanded', 'false');
+        }
+        if (clearStatus) {
+            setChatCameraStatus('');
+        }
+        if (restoreFocus) {
+            document.getElementById('chatCameraStartBtn').focus();
+        }
+    }
+
+    function captureChatCameraPhoto() {
+        const preview = document.getElementById('chatCameraPreview');
+        if (!chatCameraStream || !preview.videoWidth || !preview.videoHeight) {
+            setChatCameraStatus('The camera is not ready yet. Please wait and try again.', true);
+            return;
+        }
+
+        const captureButton = document.getElementById('chatCameraCaptureBtn');
+        const canvas = document.getElementById('chatCameraCanvas');
+        captureButton.disabled = true;
+
+        try {
+            canvas.width = preview.videoWidth;
+            canvas.height = preview.videoHeight;
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Photo capture is not supported in this browser.');
+
+            context.drawImage(preview, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    captureButton.disabled = false;
+                    setChatCameraStatus('Could not capture the photo. Please try again.', true);
+                    return;
+                }
+
+                const file = new File(
+                    [blob],
+                    `camera-photo-${Date.now()}.jpg`,
+                    { type: 'image/jpeg' },
+                );
+                stopChatCamera();
+                await processEmotionFile(file);
+            }, 'image/jpeg', 0.92);
+        } catch (error) {
+            captureButton.disabled = false;
+            setChatCameraStatus('Could not capture the photo. Please try again.', true);
+        }
+    }
+
+    async function processEmotionFile(file) {
+
+        if (!file.type.startsWith('image/')) {
+            alert('Please choose a valid image file.');
+            return;
+        }
+
+        // Show the uploaded image as a user message immediately.
+        addImageMessage('user', file);
+
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('source', 'face');
+
+        try {
+            const response = await fetch('/api/emotions/logs/detect/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                credentials: 'include',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.face_detected) {
+                currentEmotion = data.emotion;
+                emotionConfidence = data.confidence;
+                currentEmotionSource = 'face';
+                updateEmotionDisplay(data.emotion, data.confidence);
+                
+                // Add system message about detected emotion
+                addMessage('bot', `I can see you're feeling ${data.emotion}. Let's talk about it.`);
+            } else {
+                alert('Could not detect emotion from image. Please try again with a clear face photo.');
+            }
+        } catch (error) {
+            alert('Error detecting emotion. Please try again.');
+        }
+    }
+
+    function updateEmotionDisplay(emotion, confidence) {
+        const emotionEmojis = {
+            'happy': '😊',
+            'sad': '😢',
+            'angry': '😠',
+            'fear': '😨',
+            'surprise': '😲',
+            'disgust': '🤢',
+            'worried': '😟',
+            'neutral': '😐'
+        };
+
+        document.getElementById('emotionEmoji').textContent = emotionEmojis[emotion] || '😊';
+        document.getElementById('currentEmotion').textContent = emotion.charAt(0).toUpperCase() + emotion.slice(1);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatTimestamp(timestamp) {
+        if (!timestamp) return 'Just now';
+
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleString();
+    }
+
+    loadChatHistory().finally(() => {
+        document.getElementById('chatMessages').setAttribute('aria-live', 'polite');
+    });
+
+    window.addEventListener('pagehide', () => stopChatCamera({ restoreFocus: false }));
+</script>
+{% endblock %}
